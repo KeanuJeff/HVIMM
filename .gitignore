@@ -1,0 +1,32 @@
+# 排除 Python 中間檔案和快取
+__pycache__/
+*.pyc
+
+# 排除 VS Code & Conda 本地設定
+.vscode/
+.conda/
+
+# 排除大型資料集
+dataset/train2017/
+dataset/VQA_v2/
+dataset/__pycache__/  # 如果您希望保留 dataset 內的 .py 檔案
+
+# 排除模型權重
+*.pth
+*.pt
+models/llava-hf/  # 排除可能包含模型的大型資料夾
+models/*local_florence2/
+final_adapter/
+llava-hf/
+final_adapter_refcocog/
+models/__pycache__/
+processed_features/
+processed_features_iconqa_raw/
+processed_features_raw/
+processed_features_sharegpt4v/
+results_optimized_pipeline/
+results_refcocog/
+
+*.txt
+# 排除實驗結果
+*.json

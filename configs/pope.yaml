@@ -1,0 +1,15 @@
+dataset_id: "lmms-lab/POPE"
+
+num_val_samples: null 
+
+max_new_tokens: 200 
+device: "cuda"
+batch_size: 8
+
+models:
+  - name: "InstructBLIP"
+    model_id: "Salesforce/instructblip-vicuna-7b" 
+    type: "instructblip"
+  - name: "LLaVA-1.5-13B"
+    model_id: "llava-hf/llava-1.5-13b-hf"
+    type: "llava"

@@ -1,0 +1,17 @@
+iconqa_image_dir: "C:/Users/user/Desktop/HVIMM/datasets/IconQA/iconqa_data/iconqa_data/iconqa/val"
+iconqa_problem_json: "C:/Users/user/Desktop/HVIMM/datasets/IconQA/iconqa_data/iconqa_data/problems.json"
+iconqa_pid_skills_json: "C:/Users/user/Desktop/HVIMM/datasets/IconQA/iconqa_data/iconqa_data/pid2skills.json"
+
+dataset_id: "lmms-lab/ICON-QA"
+num_val_samples: 1000
+
+max_new_tokens: 200
+device: "cuda"
+batch_size: 6
+
+models:
+  - name: "Hybrid-LLaVA-RefCOCOg"
+    model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
+    type: "structural_llava"
+    custom_modules_path: "./final_adapter/custom_modules.bin"
+    adapter_path: "./final_adapter/llava_projector_lora"

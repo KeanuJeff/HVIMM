@@ -1,0 +1,16 @@
+val_img_dir: "C:/Users/user/Desktop/HVIMM/dataset/VQA_v2/val2014/val2014"
+ques_json: "C:/Users/user/Desktop/HVIMM/dataset/VQA_v2/v2_Questions_Val_mscoco/v2_OpenEnded_mscoco_val2014_questions.json"
+anns_json: "C:/Users/user/Desktop/HVIMM/dataset/VQA_v2/v2_Annotations_Val_mscoco/v2_mscoco_val2014_annotations.json"
+
+models:
+  - name: "Hybrid-LLaVA-RefCOCOg"
+    model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
+    type: "structural_llava"
+    custom_modules_path: "./final_adapter_refcocog/custom_modules.bin"
+    adapter_path: "./final_adapter_refcocog/llava_projector_lora"
+
+
+max_new_tokens: 200
+num_samples: 1000
+device: "cuda"
+batch_size: 1

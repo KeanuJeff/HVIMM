@@ -1,0 +1,12 @@
+dataset_id: "ustc-zhangzm/MMMC"
+
+num_val_samples: 100
+
+max_new_tokens: 200
+device: "cuda"
+batch_size: 4
+
+models:
+  - name: "LLaVA-NeXT-7B"
+    model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
+    type: "llava-next"

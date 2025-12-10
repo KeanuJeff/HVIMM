@@ -1,0 +1,14 @@
+dataset_id: "HuggingFaceM4/the_cauldron"
+dataset_subset: "chartqa"
+num_val_samples: 1000
+
+max_new_tokens_vqa: 200 
+device: "cuda"
+batch_size: 6
+
+models:
+  - name: "Hybrid-LLaVA-RefCOCOg"
+    model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
+    type: "structural_llava"
+    custom_modules_path: "./final_adapter/custom_modules.bin"
+    adapter_path: "./final_adapter/llava_projector_lora"
