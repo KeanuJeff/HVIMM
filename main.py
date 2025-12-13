@@ -7,11 +7,11 @@ from models.structural_llava_next import HybirdLlavaFlorenceModel
 # ================= 設定區 =================
 # 請去您的資料夾看，填入數字最大的那個 checkpoint 路徑
 # 例如: "./results_refcocog/checkpoint-600"
-CHECKPOINT_PATH = "./results_optimized_pipeline/checkpoint-1400" 
+CHECKPOINT_PATH = "./results_sharegpt4v/checkpoint-300" 
 
 # 最終輸出的資料夾
-SAVE_DIR = "./final_adapter_refcocog"
-OUTPUT_DIR = "./results_refcocog"
+SAVE_DIR = "./final_adapter_sharegpt4v"
+OUTPUT_DIR = "./results_sharegpt4v"
 # =========================================
 
 def rescue_process():
@@ -102,7 +102,7 @@ def plot_loss_curve(log_history, output_dir):
 
     plt.xlabel('Steps')
     plt.ylabel('Loss')
-    plt.title('Training and Validation Loss Curve RefCOCOg')
+    plt.title('Training and Validation Loss Curve ShareGPT4V')
     plt.legend()
     plt.grid(True)
     

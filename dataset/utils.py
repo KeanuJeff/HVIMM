@@ -219,12 +219,12 @@ def load_model_and_processor(cfg):
         else:
             print("Warning: Custom modules path not found or empty!")
 
-        """
+        
         if lora_path and os.path.exists(lora_path):
             print(f"Loading LoRA from {lora_path}...")
             # 這裡 model.llava 是 base model，我們把 LoRA 掛上去
             model.llava = PeftModel.from_pretrained(model.llava, lora_path)
-        """
+        
             
         model.eval()
         # 回傳 processor, model object, type string
@@ -280,29 +280,25 @@ def generate_answer(proc, m, mtype, images, questions, **kwargs):
 
         # 2. 使用 apply_chat_template 轉成模型看得懂的 Prompt 字串
         # proc.apply_chat_template 會將 messages 轉為模型專用的 string (包含 <image> token)
-        texts = [
+        inputs = [
             proc.apply_chat_template(
                 msg, 
-                tokenize=False, 
+                tokenize=True, 
                 add_generation_prompt=True,
-            )
+                return_dict=True,
+                 padding=True,
+                return_tensors="pt"
+            ).to(m.device)
             for msg in messages_list
         ]
-        
-        # 3. 處理輸入 (Processor 自動處理圖片與文字對齊)
-        # 傳入 texts 列表 (長度為 batch_size) 和 batch_images 列表 (長度為 batch_size)
-        inputs = proc(
-            text=texts,
-            images=images, # 傳入收集到的 PIL 圖片列表
-            padding=True,
-            return_tensors="pt"
-        ).to(m.device)
 
         # 4. 生成 (不變)
         kwargs.setdefault('max_new_tokens', 200)
+        #input_len = inputs["input_ids"].shape[-1]
         
         with torch.no_grad():
             generated_ids = m.generate(**inputs, **kwargs)
+            
 
         # 5. 解碼 (不變)
         # 裁切掉 input tokens，只保留生成的答案

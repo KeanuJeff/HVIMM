@@ -1,22 +1,18 @@
 import torch
 import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, ConcatDataset
+from torch.utils.data import Dataset
 from transformers import Trainer, TrainingArguments
 from datasets import load_dataset
 import os
-from transformers import AutoTokenizer
-import sys
-import re
 from PIL import Image
-# 【新增】需要 PeftModel 來載入舊權重
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
+from peft import LoraConfig, get_peft_model, PeftModel
 
-# 假設你的 models 資料夾在當前目錄
+# 引用你的模型與工具
 from models.structural_llava_next import HybirdLlavaFlorenceModel, GeometricUtils
 
-# 設定圖片路徑
-COCO_IMAGE_DIR = "./dataset/train2017/train2017" 
-
+# ==========================================
+# 輔助函式：繪製 Loss 曲線
+# ==========================================
 def plot_loss_curve(log_history, output_dir):
     train_steps = []
     train_loss = []
@@ -26,62 +22,80 @@ def plot_loss_curve(log_history, output_dir):
             train_loss.append(entry['loss'])
     plt.figure(figsize=(10, 6))
     if train_loss:
-        plt.plot(train_steps, train_loss, label='Training Loss', color='blue', alpha=0.7)
+        plt.plot(train_steps, train_loss, label='Training Loss', color='purple', alpha=0.7)
     plt.xlabel('Steps')
     plt.ylabel('Loss')
-    plt.title('Training Loss Curve ShareGPT4V')
+    plt.title('Training Loss Curve Visual7W (Precomputed)')
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(output_dir, "loss_curve.png"))
+    plt.savefig(os.path.join(output_dir, "loss_curve_visual7w.png"))
     plt.close()
 
-class ShareGPT4VDataset(Dataset):
-    def __init__(self, hf_dataset, feature_dir, model_processor, tokenizer):
-        # --- 【新增】預先篩選有效索引 ---
-        self.original_data = list(hf_dataset)
-        self.feature_dir = feature_dir
-        self.valid_indices = []
-        for i, item in enumerate(self.original_data):
-            # 取得 Image ID
-            image_id = str(item.get('id', i))
-            feat_path = os.path.join(self.feature_dir, f"raw_{image_id}.pt")
-            
-            # 檢查特徵檔案是否存在
-            if os.path.exists(feat_path):
-                self.valid_indices.append(i) # 記錄原始索引
-            else:
-                pass
-        
-        self.data_map = {new_idx: original_idx for new_idx, original_idx in enumerate(self.valid_indices)}
-        # --- 【新增結束】 ---
+# ==========================================
+# Dataset 定義：讀取預處理特徵 + Flatten
+# ==========================================
+class Visual7WDataset(Dataset):
+    def __init__(self, hf_dataset, feature_dir, split_name, model_processor, tokenizer):
         self.processor = model_processor
         self.tokenizer = tokenizer
+        self.feature_dir = feature_dir
+        self.split_name = split_name # 用於重建 ID，例如 'train'
+        
         self.tokenizer.padding_side = 'right'
         if hasattr(self.processor, 'tokenizer'):
             self.processor.tokenizer.padding_side = 'right'
-        self.max_length = 3460
-        self.geo_utils = GeometricUtils()
+        
+        self.max_length = 2048 
+        self.geo_utils = GeometricUtils() # 初始化幾何工具
+
+        # --- Flatten Logic (一對多) ---
+        print("Flattening Visual7W dataset...")
+        self.flat_samples = []
+        self.hf_dataset = list(hf_dataset) 
+        
+        for row_idx, item in enumerate(self.hf_dataset):
+            texts_list = item.get('texts', [])
+            for text_idx in range(len(texts_list)):
+                # 儲存 (原始 row index, 問題 index)
+                self.flat_samples.append((row_idx, text_idx))
+        
+        print(f"Original Images: {len(self.hf_dataset)}")
+        print(f"Total Training Samples: {len(self.flat_samples)}")
 
     def __len__(self):
-        return len(self.valid_indices)
+        return len(self.flat_samples)
 
     def __getitem__(self, idx):
-        original_idx = self.data_map[idx]
-        item = self.original_data[original_idx]
+        # 1. 取得原始資料索引
+        row_idx, text_idx = self.flat_samples[idx]
+        item = self.hf_dataset[row_idx]
         
-        # 1. 取得 Image ID 與 載入 Feature
-        image_id = str(item.get('id', original_idx))
+        # 2. 處理圖片
+        image_list = item.get('images', [])
+        if len(image_list) > 0:
+            image = image_list[0].convert("RGB")
+        else:
+            image = Image.new('RGB', (336, 336), (0, 0, 0))
 
-        # 載入 Preprocess 好的 Florence 特徵
-        feat_path = os.path.join(self.feature_dir, f"raw_{image_id}.pt")
-        
+        # Resize
+        target_max_size = 672 
+        w, h = image.size
+        scale = min(target_max_size / w, target_max_size / h)
+        if scale < 1.0:
+            image = image.resize((int(w * scale), int(h * scale)), Image.BICUBIC)
+
+        # 3. 【關鍵】讀取預處理的 Florence 特徵
+        # ID 必須與 preprocess 檔案中的生成邏輯一致
+        file_id = f"visual7w_{self.split_name}_{row_idx}"
+        feat_path = os.path.join(self.feature_dir, f"{file_id}.pt")
+
         shape_feat_tensor = torch.zeros(0, 48)
         centroid_tensor = torch.zeros(0, 2)
         obj_labels = []
 
         if os.path.exists(feat_path):
             try:
-                raw_data = torch.load(feat_path)
+                raw_data = torch.load(feat_path) # {'labels': [], 'polygons': []}
                 raw_labels = raw_data.get('labels', [])
                 raw_polys = raw_data.get('polygons', [])
                 
@@ -89,14 +103,16 @@ class ShareGPT4VDataset(Dataset):
                 centroid_list = []
                 valid_labels = []
 
+                # 現場計算 Fourier (CPU 計算比 Florence 推論快很多，這步保留在 DataLoader 是 OK 的)
                 for i, poly_list in enumerate(raw_polys):
                     if len(poly_list) < 6: continue
-                    target_poly = torch.tensor(poly_list, dtype=torch.float32).reshape(-1, 2).unsqueeze(0)
                     
+                    target_poly = torch.tensor(poly_list, dtype=torch.float32).reshape(-1, 2)
+                    target_poly = target_poly.unsqueeze(0) 
+
                     shape_feat = self.geo_utils.fourier_shape_encoding(target_poly, num_harmonics=24)
                     centroid = self.geo_utils.calculate_centroid(target_poly)
                     
-                    # 數值安全檢查
                     if torch.isnan(shape_feat).any() or torch.isinf(shape_feat).any() or torch.all(shape_feat==0):
                         continue
                         
@@ -108,47 +124,23 @@ class ShareGPT4VDataset(Dataset):
                     shape_feat_tensor = torch.stack(fourier_list)
                     centroid_tensor = torch.stack(centroid_list)
                     obj_labels = valid_labels
+
             except Exception as e:
-                print(f"Error loading feats for {image_id}: {e}")
+                print(f"Error loading features for {file_id}: {e}")
+        else:
+            # 如果檔案不存在 (可能是 preprocess 漏掉或錯誤)，就使用空的特徵，不報錯
+            pass
 
-        # 2. 載入與處理圖片
-        image_data = item['image']
-        image = None
-        if isinstance(image_data, Image.Image):
-            image = image_data.convert("RGB")
-        elif isinstance(image_data, str):
-            full_path = os.path.join(COCO_IMAGE_DIR, image_data)
-            if not os.path.exists(full_path) and "train2017" in image_data:
-                 full_path = os.path.join(COCO_IMAGE_DIR, "train2017", os.path.basename(image_data))
-            
-            if os.path.exists(full_path):
-                image = Image.open(full_path).convert("RGB")
-            else:
-                image = Image.new('RGB', (336, 336), (0, 0, 0))
-
-        target_max_size = 672
-        w, h = image.size
-        scale = min(target_max_size / w, target_max_size / h)
-        if scale < 1.0:
-            image = image.resize((int(w * scale), int(h * scale)), Image.BICUBIC)
-
-        # 3. 解析 Conversations
-        conversations = item['conversations']
-        human_input = ""
-        gpt_response = ""
+        # 4. 處理文字
+        texts_list = item.get('texts', [])
+        conversation = texts_list[text_idx]
+        user_input = conversation.get('user', "")
+        assistant_response = conversation.get('assistant', "")
         
-        if len(conversations) >= 2:
-            if conversations[0]['from'] == 'human':
-                human_input = conversations[0]['value']
-            if conversations[1]['from'] == 'gpt':
-                gpt_response = conversations[1]['value']
-        
-        human_input = human_input.replace("<image>", "").strip()
-        prompt = f"[INST] <image>\n{human_input} [/INST]"
-        full_text = prompt + " " + gpt_response
+        prompt = f"[INST] <image>\n{user_input} [/INST]"
+        full_text = prompt + " " + assistant_response
 
-        # 4. 【修正】使用 Processor 計算真實 Prompt 長度 (包含 Image Tokens)
-        # 這樣才能正確 Mask 掉圖片部分和 User Prompt
+        # 5. Masking Logic
         with torch.no_grad():
             prompt_inputs = self.processor(
                 images=image, 
@@ -159,7 +151,6 @@ class ShareGPT4VDataset(Dataset):
             )
         prompt_len = prompt_inputs.input_ids.shape[1]
 
-        # 5. Tokenization (Full Text)
         inputs = self.processor(
             images=image,
             text=full_text,
@@ -172,13 +163,11 @@ class ShareGPT4VDataset(Dataset):
         input_ids = inputs.input_ids[0]
         image_sizes = inputs.image_sizes[0]
         
-        # 6. Labels Masking
         labels = input_ids.clone()
         if prompt_len < len(labels):
-            labels[:prompt_len] = -100 # Mask Image Tokens + User Prompt
+            labels[:prompt_len] = -100 
         else:
             labels[:] = -100 
-            
         labels[input_ids == self.tokenizer.pad_token_id] = -100
 
         return {
@@ -192,7 +181,9 @@ class ShareGPT4VDataset(Dataset):
             "structural_labels": obj_labels
         }
 
-# 【修正】使用支援 Pixel Value Padding 的 Collator
+# ==========================================
+# Data Collator (與 RefCOCOg 通用)
+# ==========================================
 class StructuralDataCollator:
     def __call__(self, features):
         batch = {}
@@ -201,10 +192,9 @@ class StructuralDataCollator:
         batch['labels'] = torch.stack([f['labels'] for f in features])
         batch['image_sizes'] = torch.stack([f['image_sizes'] for f in features])
         
-        # 1. 處理 pixel_values 的動態 Patch 數量 Padding
+        # Pixel Values Padding
         pixel_values_list = [f['pixel_values'] for f in features]
         max_patches = max([x.shape[0] for x in pixel_values_list])
-        
         padded_pixel_values = []
         for pv in pixel_values_list:
             n_patches = pv.shape[0]
@@ -215,10 +205,11 @@ class StructuralDataCollator:
             else:
                 padded_pixel_values.append(pv)
         batch['pixel_values'] = torch.stack(padded_pixel_values)
-
-        # 2. 處理幾何特徵 Padding
-        max_objs = max([f['structural_fourier'].shape[0] for f in features])
-        max_objs = max(max_objs, 1) 
+        
+        # Structural Features Padding
+        obj_counts = [f['structural_fourier'].shape[0] for f in features]
+        if not obj_counts: max_objs = 1
+        else: max_objs = max(max(obj_counts), 1)
         
         padded_fourier = []
         padded_centroids = []
@@ -248,18 +239,21 @@ class StructuralDataCollator:
         
         return batch
 
+# ==========================================
+# Main Training Function
+# ==========================================
 def train():
     model_id = "llava-hf/llava-v1.6-mistral-7b-hf"
-    feature_dir = "./processed_features_sharegpt4v"
+    feature_dir = "./processed_features_visual7w" # 預處理檔案的路徑
     
     print("Loading Model (LLaVA ONLY)...")
+    # 【關鍵】不載入 Florence，節省顯存
     model = HybirdLlavaFlorenceModel(
         llava_model_id=model_id,
         load_llava=True,
         load_florence=False 
     )
 
-    # LoRA Config
     peft_config = LoraConfig(
         r=128,
         lora_alpha=256,
@@ -269,13 +263,11 @@ def train():
         target_modules=r".*multi_modal_projector.*linear.*" 
     )
 
-    # 權重路徑
-    adapter_path = "./final_adapter_refcocog/custom_modules.bin"
-    lora_path = "./final_adapter_refcocog/llava_projector_lora"
+    # 1. 載入上一階段的權重 (Chart2Text)
+    adapter_path = "./final_adapter_chart2text/custom_modules.bin"
+    lora_path = "./final_adapter_chart2text/llava_projector_lora"
 
-    print("=== Loading Pretrained Weights (RefCOCOg) ===")
-    
-    # 1. 載入 Custom Modules (Adapter, Projector)
+    print("=== Loading Pretrained Weights (Chart2Text) ===")
     if os.path.exists(adapter_path):
         print(f"Loading Adapter weights from {adapter_path}...")
         state_dict = torch.load(adapter_path, map_location=model.llava.device)
@@ -283,38 +275,34 @@ def train():
         model.shape_projector.load_state_dict(state_dict["shape_projector"])
         model.label_down_projector.load_state_dict(state_dict["label_down_projector"])
     else:
-        print("!!! Warning: RefCOCOg Adapter weights not found. Initializing from scratch. !!!")
+        print("Warning: Custom Adapter weights not found.")
 
-    # 2. 載入 LoRA
-    # 如果舊權重存在，使用 PeftModel.from_pretrained 載入並設定為可訓練
     if os.path.exists(lora_path):
         print(f"Loading LoRA weights from {lora_path}...")
         model.llava = PeftModel.from_pretrained(model.llava, lora_path, is_trainable=True)
     else:
         print("No pretrained LoRA found. Initializing new LoRA...")
-        #model.llava = get_peft_model(model.llava, peft_config)
-        
-    #model.llava.print_trainable_parameters()
+        model.llava = get_peft_model(model.llava, peft_config)
 
-    # 設定梯度
+    model.llava.print_trainable_parameters()
+    
+    # 開啟梯度
     for name, param in model.named_parameters():
         if "adapter" in name or "shape_projector" in name or "label_down_projector" in name:
             param.requires_grad = True
         else:
-            # 注意：LoRA 的 requires_grad 已經由 PeftModel 處理好了，這裡只處理自定義部分
-            param.requires_grad = False
+            pass
             
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Trainable Parameters: {trainable_params}")
-    print("Preparing ShareGPT4V Dataset...")
+    # 2. 載入 Dataset
+    print("Loading The Cauldron (Visual7W) Dataset...")
     try:
-        ds = load_dataset("Lin-Chen/ShareGPT4V", "ShareGPT4V", split="train", streaming=False)
-        # 測試時建議先跑少量數據：
-        # ds = ds.select(range(500)) 
+        ds = load_dataset("HuggingFaceM4/the_cauldron", "visual7w", split="train", streaming=False)
+        # ds = ds.select(range(100)) # Debug 用
         
-        train_dataset = ShareGPT4VDataset(
+        train_dataset = Visual7WDataset(
             hf_dataset=ds,
             feature_dir=feature_dir,
+            split_name="train", # 傳入 split 名稱以生成正確 ID
             model_processor=model.llava_processor,
             tokenizer=model.llava_processor.tokenizer
         )
@@ -322,20 +310,22 @@ def train():
         print(f"Error loading dataset: {e}")
         return
 
+    use_bf16 = torch.cuda.is_bf16_supported()
 
+    # 3. Training Arguments
     training_args = TrainingArguments(
-        output_dir="./results_sharegpt4v1",
-        per_device_train_batch_size=2, 
-        gradient_accumulation_steps=4, 
+        output_dir="./results_visual7w",
+        per_device_train_batch_size=2, # 因為不需要跑 Florence，這裡甚至可以嘗試開大一點 (例如 2 或 4)
+        gradient_accumulation_steps=4,
         num_train_epochs=1,
-        learning_rate=2e-4, # Fine-tune 可以稍微調低 LR，但 2e-4 對 Projector 也可以
-        fp16=True,              
-        bf16=False,
+        learning_rate=2e-4,
+        fp16=not use_bf16,              
+        bf16=use_bf16,
         optim="adamw_torch",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         logging_steps=10,
-        save_steps=100,
+        save_steps=500,
         save_total_limit=2,
         remove_unused_columns=False,
         dataloader_num_workers=4
@@ -355,10 +345,10 @@ def train():
 
     print("Starting Training...")
     trainer.train()
-    plot_loss_curve(trainer.state.log_history, "./results_sharegpt4v1")
+    plot_loss_curve(trainer.state.log_history, "./results_visual7w")
 
     print("Saving weights...")
-    save_dir = "./final_adapter_sharegpt4v1"
+    save_dir = "./final_adapter_visual7w"
     os.makedirs(save_dir, exist_ok=True)
 
     custom_weights = {

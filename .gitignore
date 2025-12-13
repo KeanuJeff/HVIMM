@@ -19,6 +19,7 @@ models/*local_florence2/
 final_adapter/
 llava-hf/
 final_adapter_refcocog/
+final_adapter_sharegpt4v/
 models/__pycache__/
 processed_features/
 processed_features_iconqa_raw/
@@ -26,6 +27,9 @@ processed_features_raw/
 processed_features_sharegpt4v/
 results_optimized_pipeline/
 results_refcocog/
+results_sharegpt4v/
+results_sharegpt4v1/
+
 
 *.txt
 # 排除實驗結果

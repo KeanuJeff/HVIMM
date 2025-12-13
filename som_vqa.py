@@ -99,7 +99,9 @@ def preprocess_dataset_with_som(cfg, dataset):
     
     # 1. 載入 SAM
     # 因為這時候還沒有 LLaVA，我們可以放心用 GPU
-    annotator = SoMAnnotator(checkpoint_path="sam_vit_h_4b8939.pth", device="cuda")
+    annotator = SoMAnnotator(checkpoint_path="sam_vit_l_0b3195.pth", device="cuda")
+    save_dir = "./som_processed_images"
+    os.makedirs(save_dir, exist_ok=True)
     
     # 用來儲存處理後圖片的字典: { question_id: (processed_image, num_marks) }
     # 1000 張 PIL 圖片在 RAM 裡大約佔 500MB~1GB，系統記憶體完全撐得住
@@ -118,7 +120,12 @@ def preprocess_dataset_with_som(cfg, dataset):
             # 產生標記圖
             # 注意：這裡我們回傳 PIL 圖片，存入 RAM
             marked_img, num_marks, _ = annotator.apply_som(img)
-            processed_cache[qid] = (marked_img, num_marks)
+            file_name = f"{qid}.jpg"
+            save_path = os.path.join(save_dir, file_name)
+            marked_img.save(save_path)
+            
+            # Cache 只存路徑和標記數量，大幅節省 RAM
+            processed_cache[qid] = (save_path, num_marks)
         except Exception as e:
             print(f"Error processing img for qid {qid}: {e}")
             # 出錯就存原圖，標記數設為 0
@@ -130,9 +137,6 @@ def preprocess_dataset_with_som(cfg, dataset):
     del annotator
     gc.collect()
     torch.cuda.empty_cache()
-    
-    # 確保顯存真的空了
-    print(f"GPU Memory after cleanup: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
     
     return processed_cache
 
@@ -203,7 +207,8 @@ def main():
             for i, qid in enumerate(qids):
                 # 從 Cache 取出預處理好的圖
                 if qid in som_cache:
-                    marked_img, num_marks = som_cache[qid]
+                    path, num_marks = som_cache[qid]
+                    marked_img = Image.open(path).convert("RGB")
                 else:
                     # 理論上不會發生，除非 dataset 變動
                     marked_img = batch_data["image"][i]
@@ -213,7 +218,7 @@ def main():
                 
                 # 修改 Prompt
                 q_text = original_questions[i]
-                new_q = f"The image is overlaid with {num_marks} numeric marks. {q_text} Answer based on the visual marks if necessary."
+                new_q = f"The image is overlaid with {num_marks} numeric marks. {q_text} Please refer to the numeric marks in the image to locate objects when reasoning."
                 batch_som_questions.append(new_q)
 
             # 進行推論

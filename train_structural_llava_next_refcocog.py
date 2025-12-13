@@ -150,16 +150,16 @@ class CaptioningDataset(Dataset):
 
         w, h = max(w, 1), max(h, 1)
         
-        # 正規化 BBox (0-1000)
+        # 正規化 BBox (0-100)
         box_norm = [
-            int(bbox[0]/w_orig * 1000), int(bbox[1]/h_orig * 1000), 
-            int((bbox[0]+bbox[2])/w_orig * 1000), int((bbox[1]+bbox[3])/h_orig * 1000)
+            int(bbox[0]/w_orig * 100), int(bbox[1]/h_orig * 100), 
+            int((bbox[0]+bbox[2])/w_orig * 100), int((bbox[1]+bbox[3])/h_orig * 100)
         ]
-        box_norm = [max(0, min(1000, x)) for x in box_norm]
-        box_str = f"[{box_norm[0]}, {box_norm[1]}, {box_norm[2]}, {box_norm[3]}]"
+        box_norm = [max(0, min(100, x)) for x in box_norm]
+        box_str = f"[x0={box_norm[0]}, y0={box_norm[1]}, x1={box_norm[2]}, y1={box_norm[3]}]"
 
         # 構建訓練輸入
-        question = f"[INST] <image>\nDescribe the object at {box_str}. [/INST]"
+        question = f"[INST] <image>\nDescribe the object at {box_str}, where x and y range from 0 to 100. [/INST]"
         answer = caption
         full_text = question + " " + answer
         

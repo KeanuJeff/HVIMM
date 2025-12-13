@@ -208,13 +208,6 @@ class HybirdLlavaFlorenceModel(nn.Module):
                 print(f"[Info] No pretrained projector found at {pretrained_path}.")
                 print(">>> Using RANDOM INITIALIZATION for label_down_projector (End-to-End Training).")
                 
-                # [新增] 顯式初始化 (Good Practice)
-                # 雖然 PyTorch Linear 預設有初始化，但手動做 Xavier/Kaiming init 更保險
-                for m in self.label_down_projector.modules():
-                    if isinstance(m, nn.Linear):
-                        nn.init.xavier_uniform_(m.weight)
-                        if m.bias is not None:
-                            nn.init.zeros_(m.bias)
             self.label_down_projector = self.label_down_projector.to(self.llava.device)
                 
             # Freeze LLaVA
