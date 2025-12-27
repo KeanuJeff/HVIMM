@@ -62,7 +62,7 @@ Answer:"""
     # -----------------------------------------------------------------
     # LLaVA / LLaVA-NeXT
     # -----------------------------------------------------------------
-    "llava": {
+    "llava-next": {
         'stage_1_prompt': """[INST] <image>
 For the provided science image and the question, generate a Scene Graph in JSON format.
 Include:
@@ -77,7 +77,6 @@ ASSISTANT: Scene Graph:[/INST]""",
 Use the image and the following Scene Graph to reason and answer the multiple-choice question.
 Scene Graph: {scene_graph}
 
-Context: {context}
 Question: {question}
 Options:
 {options_str}
@@ -88,7 +87,6 @@ ASSISTANT: Answer:[/INST]""",
         'stage_2_prompt_text': """[INST] 
 Answer the following multiple-choice science question based on the context.
 
-Context: {context}
 Question: {question}
 Options:
 {options_str}
@@ -127,15 +125,13 @@ def _format_options(choices):
         output += f"{chr(65+i)}. {choice}\n"
     return output.strip()
 
-def _build_ccot_inputs(prompts, mtype, stage, images, questions, choices_batch=None, scene_graphs=None, contexts=None):
+def _build_ccot_inputs(prompts, mtype, stage, images, questions, choices_batch=None, scene_graphs=None):
     """ 
     構建輸入。
     關鍵邏輯：如果是 Stage 2 且 image 為 None，使用 Text-only prompt。
     """
     batch_size = len(questions)
     
-    # 處理可能的 None Context
-    safe_contexts = [c if c else "N/A" for c in contexts]
     
     # --- Qwen-VL ---
     if mtype == "qwen-vl":
@@ -203,14 +199,12 @@ def _build_ccot_inputs(prompts, mtype, stage, images, questions, choices_batch=N
                     # Visual
                     prompt = prompts['stage_2_prompt_visual'].format(
                         scene_graph=scene_graphs[i],
-                        context=safe_contexts[i],
                         question=questions[i],
                         options_str=options_str
                     )
                 else:
                     # Text-only (注意：這裡移除了 <image> tag)
                     prompt = prompts['stage_2_prompt_text'].format(
-                        context=safe_contexts[i],
                         question=questions[i],
                         options_str=options_str
                     )
@@ -381,7 +375,6 @@ def main():
         print(f"\nProcessing model: {name}")
         
         base_type = mdl['type']
-        if base_type == 'llava-next': base_type = 'llava'
         
         if base_type not in CCOT_PROMPTS: continue
         prompts = CCOT_PROMPTS[base_type]
@@ -397,10 +390,7 @@ def main():
             images = batch_data["image"] # List, may contain None
             questions = batch_data["question"]
             all_answers = batch_data["answers"]
-            question_ids = batch_data["question_id"]
             choices_batch = batch_data["choices"]
-            # ScienceQA 的 hint/lecture
-            contexts = [batch_data.get("hint", [""])[k] + " " + batch_data.get("lecture", [""])[k] for k in range(len(questions))]
 
             # --- STAGE 1: 生成 Scene Graph (僅針對有圖的樣本) ---
             stage1_inputs = _build_ccot_inputs(
@@ -422,8 +412,7 @@ def main():
                 prompts, base_type, "stage_2", 
                 images, questions, 
                 choices_batch=choices_batch, 
-                scene_graphs=generated_sgs,
-                contexts=contexts
+                scene_graphs=generated_sgs
             )
             
             stage2_outputs = ccot_generate_answer(
@@ -442,7 +431,6 @@ def main():
                 scores.append(score)
                 
                 preds.append({
-                    "qid": str(question_ids[i]),
                     "pred": parsed_ans,
                     "refs": refs,
                     "score": score,

@@ -91,10 +91,10 @@ def preprocess_dataset_with_som(dataset, device="cuda"):
     
     # 初始化 SAM (使用 try-except 處理可能的顯存問題)
     try:
-        annotator = SoMAnnotator(checkpoint_path="sam_vit_h_4b8939.pth", device=device)
+        annotator = SoMAnnotator(checkpoint_path="sam_vit_l_0b3195.pth", device=device)
     except Exception as e:
         print(f"Warning: Failed to load SAM on {device}, trying CPU... ({e})")
-        annotator = SoMAnnotator(checkpoint_path="sam_vit_h_4b8939.pth", device="cpu")
+        annotator = SoMAnnotator(checkpoint_path="sam_vit_l_0b3195.pth", device="cpu")
 
     save_dir = "./som_iconqa_images"
     os.makedirs(save_dir, exist_ok=True)

@@ -463,7 +463,7 @@ def main():
                     "refs": refs, 
                     "score": score
                 })
-            del images, questions, all_answers, ans_list
+            del images, questions, all_answers
             if 'batch_data' in locals():
                 del batch_data
             

@@ -48,7 +48,7 @@ Answer:""", # 這裡省略了 "Answer the question with a single word or short p
     # -----------------------------------------------------------------
     # LLaVA (USER: ... ASSISTANT: 格式)
     # -----------------------------------------------------------------
-    "llava": {
+    "llava-next": {
         # 【修改點 3】: 採用 JSON 格式要求，模仿原始 sgPrompt
         'stage_1_prompt': """[INST] <image>
 For the provided image and its associated question, generate a scene graph in JSON format that includes the following:
@@ -57,14 +57,14 @@ For the provided image and its associated question, generate a scene graph in JS
 3. Object relationships that are relevant to answering the question.
 
 Question: {question}
-ASSISTANT: Scene Graph:[/INST]""",
+ASSISTANT: Scene Graph: [/INST]""",
 
         # 【修改點 4】: 結合 Answer Prompt 並要求單詞答案 (VQA v2)
         'stage_2_prompt': """[INST] <image>
 Use the image and the following Scene Graph to reason and answer the question with a single word.
 Scene Graph: {scene_graph}
 Question: {question}
-ASSISTANT: Answer:[/INST]""",
+ASSISTANT: Answer: [/INST]""",
     }
 }
 
@@ -138,7 +138,7 @@ def _build_ccot_inputs(prompts, mtype, stage, images, questions, **kwargs):
             messages_list.append(messages)
         return {"messages_list": messages_list}
 
-    elif mtype == "llava":
+    elif mtype == "llava-next":
         prompt_list = []
         for i in range(batch_size):
             if stage == "stage_1":
@@ -213,7 +213,7 @@ def ccot_generate_answer(proc, m, mtype, images, questions,
             final_answers.append(answer)
         return final_answers
 
-    elif mtype == "llava" or mtype == "dvit_llava":
+    elif mtype == "llava-next" or mtype == "dvit_llava":
         if prompt_list is None:
             prompt_list = []
             for q in questions:

@@ -50,7 +50,7 @@ Final Answer:"""
     # -----------------------------------------------------------------
     # LLaVA / LLaVA-NeXT
     # -----------------------------------------------------------------
-    "llava": {
+    "llava-next": {
         'stage_1_prompt': """[INST] <image>
 For the provided image, generate a Scene Graph in JSON format.
 Strictly list:
@@ -236,7 +236,6 @@ def main():
         print(f"\nProcessing model: {name}")
         
         base_type = mdl['type']
-        if base_type == 'llava-next': base_type = 'llava'
         
         if base_type not in CCOT_PROMPTS:
             print(f"Skipping {name}: No CCoT prompts defined.")

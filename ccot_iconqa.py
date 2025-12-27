@@ -60,9 +60,9 @@ Answer:"""
     # -----------------------------------------------------------------
     # LLaVA (USER: ... ASSISTANT: 格式)
     # -----------------------------------------------------------------
-    "llava": {
+    "llava-next": {
         # Stage 1: 生成 Scene Graph
-        'stage_1_prompt': """USER: <image>
+        'stage_1_prompt': """[INST] <image>
 For the provided image and its associated question, generate a scene graph in JSON format.
 Analyze the abstract icon, diagram, or chart and extract:
 1. Key visual elements (objects/symbols) relevant to the question.
@@ -70,7 +70,7 @@ Analyze the abstract icon, diagram, or chart and extract:
 3. Spatial or semantic relationships between them.
 
 Question: {question}
-ASSISTANT: Scene Graph:""",
+ASSISTANT: Scene Graph: [/INST]""",
 
         # Stage 2 (MCQ): 多選題提示
         'stage_2_mcq': """[INST] <image>
@@ -287,9 +287,8 @@ def main():
         name = mdl["name"]
         print(f"\nProcessing model: {name}")
         
-        # 檢查是否有定義 Prompt
+        # 檢查是否有定義 Promptxx
         base_type = mdl['type']
-        if base_type == 'llava-next': base_type = 'llava' # 共用 prompt
         
         if base_type not in CCOT_PROMPTS:
             print(f"Warning: No CCoT prompts for '{base_type}'. Skipping.")

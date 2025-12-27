@@ -370,13 +370,14 @@ class HybirdLlavaFlorenceModel(nn.Module):
                 pixel_values=inputs["pixel_values"], 
                 max_new_tokens=256, 
                 do_sample=False,
-                num_beams=3,
-                output_scores=True,           # <--- 請求輸出分數
-                return_dict_in_generate=True  # <--- 請求回傳詳細資訊
+                num_beams=3
             )
             
             # 取得生成的文字
-            generated_ids = outputs.sequences
+            if hasattr(outputs, "sequences"):
+                generated_ids = outputs.sequences
+            else:
+                generated_ids = outputs
             generated_text = self.florence_processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
             
             # 標準解析 (取得所有偵測到的 Labels)
@@ -431,6 +432,7 @@ class HybirdLlavaFlorenceModel(nn.Module):
                                 if len(p) >= 6:
                                     result['labels'].append(label)
                                     result['polygons'].append(p)
+                del inputs_seg, ids_seg
                                     
             return result
 
@@ -440,6 +442,8 @@ class HybirdLlavaFlorenceModel(nn.Module):
         Training 階段在 forward 中呼叫這個。
         """
         fourier_features = torch.nan_to_num(fourier_features, nan=0.0)
+        is_nan_mask = torch.isnan(centroids).any(dim=-1) # Shape: (N_objs,)
+        is_valid_mask = ~is_nan_mask # 有效的位置標記為 True
         centroids = torch.nan_to_num(centroids, nan=0.0)
         device = self.shape_projector.mlp[0].weight.device
         dtype = self.shape_projector.mlp[0].weight.dtype
@@ -464,7 +468,7 @@ class HybirdLlavaFlorenceModel(nn.Module):
         # 為了支援 Batch Forward，這裡我們假設輸入的 fourier_features 是 (N_objs, 48)
         
         if len(labels) == 0:
-             return torch.zeros(1, 1, self.embedding_dim, device=device, dtype=dtype)
+             return torch.zeros(1, 1, self.vision_dim, device=device, dtype=dtype)
 
         
         # 計算 Text Embeddings (這一步比較慢，可以優化成 batch)
@@ -482,13 +486,10 @@ class HybirdLlavaFlorenceModel(nn.Module):
         out = self.label_down_projector(input_to_proj)
         
         # 如果需要數值穩定，可以在運算完後轉回 fp32 做加法，或者直接用當前 dtype
-        # 這裡建議統一轉回 LLaVA 的 dtype (通常是 fp16) 進行後續合併
-        target_dtype = self.llava.dtype
         
         text_feat = out.to(dtype=target_dtype)
-        shape_feat = shape_emb.to(dtype=target_dtype)
         
-        combined = text_feat + shape_emb
+        final_tokens = text_feat + shape_emb
         grid_size = 24
         # 使用 clamp 防止極端值超出 23
         grid_x = (centroids[..., 0] * grid_size).long().clamp(0, grid_size - 1)
@@ -501,11 +502,11 @@ class HybirdLlavaFlorenceModel(nn.Module):
         vit_pos_feat = F.embedding(pos_indices, self.vit_pos_embed)
         
         # 4. 轉型並相加
-        vit_pos_feat = vit_pos_feat.to(dtype=combined.dtype)
-        combined = combined + vit_pos_feat
+        vit_pos_feat = vit_pos_feat.to(dtype=final_tokens.dtype)
+        final_tokens = final_tokens + (vit_pos_feat * is_valid_mask.unsqueeze(-1))
         final_tokens = final_tokens.to(self.llava.dtype)
         
-        return final_tokens.unsqueeze(0) # (1, N_objs, 4096) - Batch size 1 for this context
+        return final_tokens.unsqueeze(0) # (1, N_objs, 1024) - Batch size 1 for this context
 
     def extract_structural_context(self, image):
         """
@@ -856,6 +857,7 @@ class HybirdLlavaFlorenceModel(nn.Module):
             # Output: (Batch * N_patches, Num_Tokens, 1024)
             vis_out = self.llava.vision_tower(flat_pixel_values, output_hidden_states=True)
             vis_feat_raw = vis_out.hidden_states[-2] 
+            del vis_out
             
             # C. Early Fusion Adapter (在 1024 維度進行)
             # 關鍵：對齊 Batch Size

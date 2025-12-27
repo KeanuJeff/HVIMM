@@ -11,7 +11,7 @@ from PIL import Image
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 
 # 假設你的模型檔案在 models 資料夾下
-from models.structural_llava_next import HybirdLlavaFlorenceModel, GeometricUtils
+from models.structural_llava_next_raw import HybirdLlavaFlorenceModel, GeometricUtils
 
 # ==========================================
 # 輔助函式：繪製 Loss 曲線
@@ -39,13 +39,13 @@ def plot_loss_curve(log_history, output_dir):
 # ==========================================
 class CauldronChartDataset(Dataset):
     def __init__(self, hf_dataset, model_processor, tokenizer):
-        self.data = list(hf_dataset)
+        self.data = hf_dataset
         self.processor = model_processor
         self.tokenizer = tokenizer
         self.tokenizer.padding_side = 'right'
         if hasattr(self.processor, 'tokenizer'):
             self.processor.tokenizer.padding_side = 'right'
-        self.max_length = 2048 # 圖表描述通常很長
+        self.max_length = 3460 # 圖表描述通常很長
 
     def __len__(self):
         return len(self.data)
@@ -221,8 +221,8 @@ def train():
     # =========================================================
     # 【新增】 載入 Pretrained RefCOCOg 權重
     # =========================================================
-    adapter_path = "./final_adapter_iconqa/custom_modules.bin"
-    lora_path = "./final_adapter_iconqa/llava_projector_lora"
+    adapter_path = "./final_adapter_refcocog1/custom_modules.bin"
+    lora_path = "./final_adapter_refcocog1/llava_projector_lora"
 
     print("=== Loading Pretrained Weights (RefCOCOg) ===")
     
@@ -249,10 +249,12 @@ def train():
     
     # 設定梯度
     for name, param in model.named_parameters():
-        if "adapter" in name or "shape_projector" in name or "label_down_projector" in name:
+        if "adapter" in name or "shape_projector" in name or "label_down_projector" in name or "lora_" in name:
             param.requires_grad = True
         else:
-            pass
+            param.requires_grad = False
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Trainable Parameters: {trainable_params}")
             
     # 2. 載入 Dataset
     print("Loading The Cauldron (Chart2Text) Dataset...")
@@ -269,27 +271,24 @@ def train():
         print(f"Error loading dataset: {e}")
         return
 
-    # BF16 Check
-    use_bf16 = torch.cuda.is_bf16_supported()
-    print(f"BF16 Supported: {use_bf16}")
 
     # 3. Training Arguments
     training_args = TrainingArguments(
         output_dir="./results_chart2text",
-        per_device_train_batch_size=1, 
-        gradient_accumulation_steps=1,
+        per_device_train_batch_size=3, 
+        gradient_accumulation_steps=4,
         num_train_epochs=1,
-        learning_rate=2e-4,
-        fp16=not use_bf16,              
-        bf16=use_bf16,
+        learning_rate=2e-5,
+        fp16=True,              
+        bf16=False,
         optim="adamw_torch",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        logging_steps=1,
-        save_steps=200,
+        logging_steps=20,
+        save_steps=100,
         save_total_limit=2,
         remove_unused_columns=False,
-        dataloader_num_workers=4
+        dataloader_num_workers=2
     )
 
     if hasattr(model.llava, "gradient_checkpointing_enable"):

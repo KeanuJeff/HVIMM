@@ -15,11 +15,9 @@ initial_lora_path_qwen: "./qwen-vl-7b-vqa-cot-lora"
 
 max_new_tokens: 200
 device: "cuda"
-batch_size: 4
+batch_size: 8
 
 models:
-  - name: "Hybrid-LLaVA-RefCOCOg"
+  - name: "LLaVA-NeXT-7B"
     model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
-    type: "structural_llava"
-    custom_modules_path: "./final_adapter/custom_modules.bin"
-    adapter_path: "./final_adapter/llava_projector_lora"
+    type: "llava-next"

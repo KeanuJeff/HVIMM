@@ -3,6 +3,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import yaml
 import torch
 import gc
+torch.cuda.empty_cache()
+gc.collect()
 import json 
 import re 
 from torch.utils.data import DataLoader
@@ -291,10 +293,11 @@ def main():
                 del images, questions, all_answers, ans_list
                 if 'batch_data' in locals():
                     del batch_data
+                gc.collect() 
+                torch.cuda.empty_cache(
             
             # 這是關鍵：如果 Python 物件沒死，PyTorch 就不能釋放 GPU 記憶體
-            gc.collect() 
-            torch.cuda.empty_cache()
+            )
 
             # 2. 計算並儲存當前類別的 metrics
             if not all_true_labels:

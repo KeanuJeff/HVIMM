@@ -4,12 +4,11 @@ num_val_samples: null
 
 max_new_tokens: 200 
 device: "cuda"
-batch_size: 8
+batch_size: 1
 
 models:
-  - name: "InstructBLIP"
-    model_id: "Salesforce/instructblip-vicuna-7b" 
-    type: "instructblip"
-  - name: "LLaVA-1.5-13B"
-    model_id: "llava-hf/llava-1.5-13b-hf"
-    type: "llava"
+  - name: "Hybrid-LLaVA-RefCOCOg"
+    model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
+    type: "structural_llava"
+    custom_modules_path: "./final_adapter_mixed/custom_modules.bin"
+    adapter_path: "./final_adapter_llava_instruct1/llava_projector_lora"

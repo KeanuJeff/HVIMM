@@ -7,11 +7,11 @@ num_val_samples: 1000
 
 max_new_tokens: 200
 device: "cuda"
-batch_size: 6
+batch_size: 2
 
 models:
   - name: "Hybrid-LLaVA-RefCOCOg"
     model_id: "llava-hf/llava-v1.6-mistral-7b-hf"
     type: "structural_llava"
-    custom_modules_path: "./final_adapter/custom_modules.bin"
-    adapter_path: "./final_adapter/llava_projector_lora"
+    custom_modules_path: "./final_adapter_llava_instruct1/custom_modules.bin"
+    adapter_path: "./final_adapter_llava_instruct1/llava_projector_lora"

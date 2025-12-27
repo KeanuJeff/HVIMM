@@ -11,6 +11,14 @@ dataset/train2017/
 dataset/VQA_v2/
 dataset/__pycache__/  # 如果您希望保留 dataset 內的 .py 檔案
 
+final_adapter*/
+
+# 忽略所有以 results 開頭的資料夾
+results*/
+
+# 忽略所有以 processed_features 開頭的資料夾 (建議也加上，因為看起來體積很大)
+processed_features*/
+
 # 排除模型權重
 *.pth
 *.pt

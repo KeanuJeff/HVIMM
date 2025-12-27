@@ -96,10 +96,10 @@ def preprocess_dataset_with_som(dataset, device="cuda"):
     
     # 初始化 SAM
     try:
-        annotator = SoMAnnotator(checkpoint_path="sam_vit_h_4b8939.pth", device=device)
+        annotator = SoMAnnotator(checkpoint_path="sam_vit_l_0b3195.pth", device=device)
     except Exception as e:
         print(f"Warning: Failed to load SAM on {device}, trying CPU... ({e})")
-        annotator = SoMAnnotator(checkpoint_path="sam_vit_h_4b8939.pth", device="cpu")
+        annotator = SoMAnnotator(checkpoint_path="sam_vitl_0b3195.pth", device="cpu")
 
     processed_cache = {} 
     print(f"Processing {len(dataset)} images...")

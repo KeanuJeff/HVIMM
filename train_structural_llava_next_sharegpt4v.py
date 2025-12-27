@@ -12,7 +12,7 @@ from PIL import Image
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 
 # 假設你的 models 資料夾在當前目錄
-from models.structural_llava_next import HybirdLlavaFlorenceModel, GeometricUtils
+from models.structural_llava_next_raw import HybirdLlavaFlorenceModel, GeometricUtils
 
 # 設定圖片路徑
 COCO_IMAGE_DIR = "./dataset/train2017/train2017" 
@@ -269,6 +269,7 @@ def train():
         target_modules=r".*multi_modal_projector.*linear.*" 
     )
 
+    """
     # 權重路徑
     adapter_path = "./final_adapter_refcocog/custom_modules.bin"
     lora_path = "./final_adapter_refcocog/llava_projector_lora"
@@ -295,6 +296,7 @@ def train():
         #model.llava = get_peft_model(model.llava, peft_config)
         
     #model.llava.print_trainable_parameters()
+    """
 
     # 設定梯度
     for name, param in model.named_parameters():
@@ -328,13 +330,13 @@ def train():
         per_device_train_batch_size=2, 
         gradient_accumulation_steps=4, 
         num_train_epochs=1,
-        learning_rate=2e-4, # Fine-tune 可以稍微調低 LR，但 2e-4 對 Projector 也可以
+        learning_rate=1e-5, # Fine-tune 可以稍微調低 LR，但 2e-4 對 Projector 也可以
         fp16=True,              
         bf16=False,
         optim="adamw_torch",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        logging_steps=10,
+        logging_steps=30,
         save_steps=100,
         save_total_limit=2,
         remove_unused_columns=False,

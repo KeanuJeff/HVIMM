@@ -8,7 +8,7 @@ from PIL import Image
 from peft import LoraConfig, get_peft_model, PeftModel
 
 # 引用你的模型與工具
-from models.structural_llava_next import HybirdLlavaFlorenceModel, GeometricUtils
+from models.structural_llava_next_raw import HybirdLlavaFlorenceModel, GeometricUtils
 
 # ==========================================
 # 輔助函式：繪製 Loss 曲線
@@ -45,13 +45,13 @@ class Visual7WDataset(Dataset):
         if hasattr(self.processor, 'tokenizer'):
             self.processor.tokenizer.padding_side = 'right'
         
-        self.max_length = 2048 
+        self.max_length = 3460
         self.geo_utils = GeometricUtils() # 初始化幾何工具
 
         # --- Flatten Logic (一對多) ---
         print("Flattening Visual7W dataset...")
         self.flat_samples = []
-        self.hf_dataset = list(hf_dataset) 
+        self.hf_dataset = hf_dataset
         
         for row_idx, item in enumerate(self.hf_dataset):
             texts_list = item.get('texts', [])
@@ -137,7 +137,7 @@ class Visual7WDataset(Dataset):
         user_input = conversation.get('user', "")
         assistant_response = conversation.get('assistant', "")
         
-        prompt = f"[INST] <image>\n{user_input} [/INST]"
+        prompt = f"[INST] <image>\n{user_input}. Give the answer in the format like 'Answer: [single letter]'. [/INST]"
         full_text = prompt + " " + assistant_response
 
         # 5. Masking Logic
@@ -264,8 +264,8 @@ def train():
     )
 
     # 1. 載入上一階段的權重 (Chart2Text)
-    adapter_path = "./final_adapter_chart2text/custom_modules.bin"
-    lora_path = "./final_adapter_chart2text/llava_projector_lora"
+    adapter_path = "./final_adapter_refcocog1/custom_modules.bin"
+    lora_path = "./final_adapter_refcocog1/llava_projector_lora"
 
     print("=== Loading Pretrained Weights (Chart2Text) ===")
     if os.path.exists(adapter_path):
@@ -277,6 +277,7 @@ def train():
     else:
         print("Warning: Custom Adapter weights not found.")
 
+    """
     if os.path.exists(lora_path):
         print(f"Loading LoRA weights from {lora_path}...")
         model.llava = PeftModel.from_pretrained(model.llava, lora_path, is_trainable=True)
@@ -285,14 +286,18 @@ def train():
         model.llava = get_peft_model(model.llava, peft_config)
 
     model.llava.print_trainable_parameters()
+    """
     
     # 開啟梯度
     for name, param in model.named_parameters():
         if "adapter" in name or "shape_projector" in name or "label_down_projector" in name:
             param.requires_grad = True
         else:
-            pass
+            param.requires_grad = False
             
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Trainable Parameters: {trainable_params}")
+
     # 2. 載入 Dataset
     print("Loading The Cauldron (Visual7W) Dataset...")
     try:
@@ -310,22 +315,20 @@ def train():
         print(f"Error loading dataset: {e}")
         return
 
-    use_bf16 = torch.cuda.is_bf16_supported()
-
     # 3. Training Arguments
     training_args = TrainingArguments(
         output_dir="./results_visual7w",
         per_device_train_batch_size=2, # 因為不需要跑 Florence，這裡甚至可以嘗試開大一點 (例如 2 或 4)
         gradient_accumulation_steps=4,
         num_train_epochs=1,
-        learning_rate=2e-4,
-        fp16=not use_bf16,              
-        bf16=use_bf16,
+        learning_rate=2e-5,
+        fp16=True,              
+        bf16=False,
         optim="adamw_torch",
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         logging_steps=10,
-        save_steps=500,
+        save_steps=100,
         save_total_limit=2,
         remove_unused_columns=False,
         dataloader_num_workers=4

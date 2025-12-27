@@ -16,7 +16,7 @@ from transformers import (
 from models.llava_model import ModifiedLlavaModel
 from peft import PeftModel
 from PIL import Image
-from models.structural_llava_next import HybirdLlavaFlorenceModel
+from models.structural_llava_next_raw import HybirdLlavaFlorenceModel
 import os
 
 # -----------------------------------------------------------------
@@ -199,6 +199,10 @@ def load_model_and_processor(cfg):
             load_llava=True,
             load_florence=True
         )
+        if hasattr(model, "vit_pos_embed") and model.llava is not None:
+            # 將 buffer 移動到與 LLaVA 主模型相同的裝置 (通常是 cuda:0)
+            target_device = model.llava.device
+            model.vit_pos_embed = model.vit_pos_embed.to(target_device)
         
         # 2. 載入訓練好的權重
         custom_path = cfg.get("custom_modules_path")

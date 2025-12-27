@@ -7,10 +7,10 @@ from datasets import load_dataset
 import os
 import sys
 from PIL import Image # 記得 import PIL
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 
 #sys.path.append('./models')
-from models.structural_llava_next import HybirdLlavaFlorenceModel, GeometricUtils
+from models.structural_llava_next_raw import HybirdLlavaFlorenceModel, GeometricUtils
 
 def plot_loss_curve(log_history, output_dir):
     """
@@ -159,7 +159,7 @@ class CaptioningDataset(Dataset):
         box_str = f"[x0={box_norm[0]}, y0={box_norm[1]}, x1={box_norm[2]}, y1={box_norm[3]}]"
 
         # 構建訓練輸入
-        question = f"[INST] <image>\nDescribe the object at {box_str}, where x and y range from 0 to 100. [/INST]"
+        question = f"[INST] <image>\nDescribe the object at {box_str}, where (0, 0) is at the upper left and (100, 100) is at the lower right. [/INST]"
         answer = caption
         full_text = question + " " + answer
         
@@ -302,7 +302,7 @@ def train():
 
     # 2. 定義 LoRA Config
     #    關鍵：我們利用正則表達式 (regex) 只鎖定 "multi_modal_projector" 裡面的 Linear 層
-    """
+    
     peft_config = LoraConfig(
         r=128,           # LoRA Rank (可以調大一點，例如 32 或 64，因為 Projector 很重要)
         lora_alpha=256,  # Alpha 通常設為 r 的 2 倍
@@ -314,9 +314,33 @@ def train():
     )
 
     # 3. 將 LLaVA 包裹成 PEFT 模型
-    model.llava = get_peft_model(model.llava, peft_config)
+    adapter_path = "./final_adapter_textcaps/custom_modules.bin"
+    lora_path = "./final_adapter_textcaps/llava_projector_lora"
+
+    print("=== Loading Pretrained Weights (RefCOCOg) ===")
+    
+    # 1. 載入 Custom Modules (Adapter, Projector)
+    if os.path.exists(adapter_path):
+        print(f"Loading Adapter weights from {adapter_path}...")
+        state_dict = torch.load(adapter_path, map_location=model.llava.device)
+        model.adapter.load_state_dict(state_dict["adapter"])
+        model.shape_projector.load_state_dict(state_dict["shape_projector"])
+        model.label_down_projector.load_state_dict(state_dict["label_down_projector"])
+    else:
+        print("!!! Warning: RefCOCOg Adapter weights not found. Initializing from scratch. !!!")
+
+    # 2. 載入 LoRA
+    # 如果舊權重存在，使用 PeftModel.from_pretrained 載入並設定為可訓練
+    """
+    if os.path.exists(lora_path):
+        print(f"Loading LoRA weights from {lora_path}...")
+        model.llava = PeftModel.from_pretrained(model.llava, lora_path, is_trainable=True)
+    else:
+        print("No pretrained LoRA found. Initializing new LoRA...")
+        model.llava = get_peft_model(model.llava, peft_config)
     model.llava.print_trainable_parameters() # 這會印出有多少參數是用 LoRA 訓練的
     """
+    
     
     print("Setting up gradients for custom modules...")
     for name, param in model.named_parameters():
@@ -353,19 +377,19 @@ def train():
     combined_train_dataset = ConcatDataset(all_datasets)
     
     training_args = TrainingArguments(
-        output_dir="./results_refcocog",
+        output_dir="./results_refcocog2",
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4,
         num_train_epochs=1,
-        learning_rate=0.00001,
+        learning_rate=1e-4,
         fp16=True,             
         bf16=False,
         optim="adamw_torch",
-        max_grad_norm=0.5,
+        max_grad_norm=1,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         logging_steps=10,
-        save_steps=200,
+        save_steps=100,
         save_total_limit=2,
         remove_unused_columns=False, # 依然必須是 False
         dataloader_num_workers=4     # 建議設高一點，因為現在 Fourier 在 worker 裡算
@@ -387,10 +411,10 @@ def train():
 
     print("Starting Training...")
     trainer.train()
-    plot_loss_curve(trainer.state.log_history, "./results_refcocog")
+    plot_loss_curve(trainer.state.log_history, "./results_refcocog2")
 
     print("Training Complete. Saving weights...")
-    save_dir = "./final_adapter_refcocog"
+    save_dir = "./final_adapter_refcocog2"
     os.makedirs(save_dir, exist_ok=True)
 
     # 1. 儲存自定義組件 (Adapter, Shape Projector, Label Down Projector)
