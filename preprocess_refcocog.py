@@ -6,21 +6,19 @@ from datasets import load_dataset
 from tqdm import tqdm
 from PIL import Image
 
-# 載入模型 Class
 from models.structural_llava_next import HybirdLlavaFlorenceModel
 
 def preprocess_dataset():
-    output_dir = "./processed_features_raw" # 建議改名區分
+    output_dir = "./processed_features_raw" 
     os.makedirs(output_dir, exist_ok=True)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading Model (Florence ONLY) on {device}...")
     
-    # 【關鍵修改】只載入 Florence，不載入 LLaVA
     model = HybirdLlavaFlorenceModel(
         load_llava=False, 
         load_florence=True,
-        florence_model_id="./models/local_florence2" # 或 "microsoft/Florence-2-large"
+        florence_model_id="./models/local_florence2" 
     )
     
     dataset_name = "lmms-lab/RefCOCOg" 
@@ -34,7 +32,6 @@ def preprocess_dataset():
         print(f"-> Processing Split: {split}")
         ds = load_dataset(dataset_name, split=split, streaming=True)
         
-        # 檢查 Keys
         try:
             first_item = next(iter(ds))
             print(f"   [Check] Sample Keys: {list(first_item.keys())}")
@@ -50,7 +47,6 @@ def preprocess_dataset():
         for i, item in tqdm(enumerate(ds)):
             img_id = str(item['question_id'])
             
-            # 改為 .pt 檔存 Dict，而非 Tensor
             save_path = os.path.join(output_dir, f"raw_{img_id}.pt")
             
             if os.path.exists(save_path):
@@ -66,22 +62,16 @@ def preprocess_dataset():
             image = image_obj.convert("RGB")
             
             with torch.no_grad():
-                # 【關鍵修改】只執行 Florence 偵測
-                # 這會回傳 {'labels': [...], 'polygons': [[...], [...]]}
-                # 不會進行 Fourier 計算，也不會過 Projector
                 result_dict = model.run_florence_inference(image)
                 
-                # 簡單驗證
                 if not result_dict['labels']:
-                    # 沒抓到東西，存個空的以防萬一，或者選擇跳過
-                    # 這裡選擇存空的，方便 Dataset 端處理
                     pass
                 
                 # 存檔 (存 Raw Data)
                 torch.save(result_dict, save_path)
                 processed_ids.add(img_id)
-            del result_dict, image  # 刪除參照
-            torch.cuda.empty_cache() # 歸還顯存
+            del result_dict, image 
+            torch.cuda.empty_cache() 
             gc.collect()
 
     print(f"Preprocessing Completed! Total unique images: {len(processed_ids)}")
