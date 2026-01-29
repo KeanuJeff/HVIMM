@@ -14,7 +14,6 @@ class VQADataset(Dataset):
         with open(anns_json, 'r') as f:
             ann_data = json.load(f)
         self.questions = questions
-        # 依 question_id 索引對答案
         self.ref_ans = {a["question_id"]: [ans["answer"] for ans in a["answers"]] for a in ann_data["annotations"]}
         self.img_dir = img_dir
         self.transform = transforms.ToTensor()
