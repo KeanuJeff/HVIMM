@@ -26,25 +26,16 @@ def parse_final_answer_yesno(full_text):
     match = re.search(r"Final Answer:\s*(Yes|No)", full_text, re.IGNORECASE)
     if match:
         return match.group(1).capitalize()
-    # 2. 備用：尋找 "Answer: [Yes/No]"
     match = re.search(r"Answer:\s*(Yes|No)", full_text, re.IGNORECASE)
     if match:
         return match.group(1).capitalize()
-    # 3. 備用：尋找最後一個被提及的 "Yes" 或 "No"
     matches = re.findall(r"\b(Yes|No)\b", full_text, re.IGNORECASE)
     if matches:
         return matches[-1].capitalize()
-    return "" # 提取失敗
+    return "" 
 
-# =================================================================
-# 【新函數】: POPE 專用的 Prompt
-# =================================================================
 
 def format_pope_prompt(question):
-    """
-    格式化一個提示，要求模型回答關於圖像內容的是非題。
-    'question' 來自 POPE 資料集 (e.g., "Is there an apple?")
-    """
     prompt = ("Based on the image, answer the following Yes/No question. You can either answer directly or with some reasoning. State your final answer in the format 'Final Answer: [Yes/No]'.\n\n")
     
     prompt += f"Question: {question}\n"
@@ -53,15 +44,8 @@ def format_pope_prompt(question):
     
     return prompt
 
-# =================================================================
-# 【重用】: 答案生成函數 (修改為使用 format_pope_prompt)
-# =================================================================
 
 def generate_answer_yesno(proc, m, mtype, images, questions, **kwargs):
-    """
-    此函數使用 POPE 專用的提示 (format_pope_prompt)。
-    支援: Gemma3, Qwen-VL, LLaVA, InstructBLIP, Qwen3-VL
-    """
     batch_size = len(questions)
     
     # --- Gemma 3 ---
@@ -161,42 +145,30 @@ def generate_answer_yesno(proc, m, mtype, images, questions, **kwargs):
     if mtype == "structural_llava":
         answers = []
         for i in range(batch_size):
-            # 1. 格式化問題
-            # 使用 POPE 專用的 Prompt (要求回答 Yes/No)
             q_text = format_pope_prompt(questions[i])
             
             try:
-                # 2. 呼叫模型推論
-                # model.generate_answer 內部會處理 Florence 幾何特徵提取
                 raw_ans = m.generate_answer(images[i], q_text)
                 
-                # 3. 解析答案
-                # 優先使用 CoT 解析邏輯
                 parsed = parse_final_answer_yesno(raw_ans)
                 
-                # 如果解析失敗，進行關鍵字掃描 (因為 POPE 很單純)
                 if not parsed:
                     raw_lower = raw_ans.lower()
-                    # 簡單啟發式規則：找最後出現的 yes 或 no
-                    # 注意：要避免匹配到 "not" 裡面的 "no"
                     matches = re.findall(r"\b(yes|no)\b", raw_lower)
                     if matches:
                         parsed = matches[-1].capitalize()
                     else:
-                        parsed = "No" # 預設保守回答
+                        parsed = "No" 
                 
                 answers.append(parsed)
                 
             except Exception as e:
                 print(f"[Error] Sample {i}: {e}")
-                answers.append("No") # 出錯時保守回答 No
+                answers.append("No") 
         return answers
         
     return [""] * batch_size
 
-# =================================================================
-# 【核心修改】: 主評估迴圈 (分組評估)
-# =================================================================
 
 def main():
     config_dir = "configs"
@@ -209,7 +181,6 @@ def main():
         
     cfg = yaml.safe_load(open(file_path))
     
-    # 【新的評估目標】: 三種類別
     TARGET_CATEGORIES = ["random", "popular", "adversarial"]
     SAMPLES_PER_CATEGORY = 500
     
@@ -225,7 +196,7 @@ def main():
         proc, mdl_obj, mtype = load_model_and_processor(mdl)
         mdl_obj.eval()
         
-        model_category_results = {} # 儲存此模型在三個類別上的結果
+        model_category_results = {} 
 
         generate_params = {
             "max_new_tokens": cfg.get("max_new_tokens", 300),
@@ -234,11 +205,9 @@ def main():
             "num_beams": 1
         }
 
-        # 【關鍵修改】: 迴圈處理三種類別
         for category in TARGET_CATEGORIES:
             print(f"\n--- Running Category: {category.upper()} ({SAMPLES_PER_CATEGORY} samples) ---")
             
-            # 1. 載入並採樣當前類別的資料
             ds = POPEDataset(
                 dataset_id=cfg["dataset_id"],
                 split="test", # POPE 使用 'test' split
@@ -290,10 +259,8 @@ def main():
                 gc.collect() 
                 torch.cuda.empty_cache(
             
-            # 這是關鍵：如果 Python 物件沒死，PyTorch 就不能釋放 GPU 記憶體
             )
 
-            # 2. 計算並儲存當前類別的 metrics
             if not all_true_labels:
                 print(f"Skipping category {category}: No data processed.")
                 continue
@@ -313,14 +280,13 @@ def main():
                 "count": len(all_true_labels),
                 "accuracy": mean_acc,
                 "metrics": report_dict,
-                "predictions": preds_list_for_json # 每個類別單獨儲存預測
+                "predictions": preds_list_for_json 
             }
             
             print(f"  Accuracy: {mean_acc:.2f}%")
             if 'Yes' in report_dict:
                 print(f"  Yes F1: {report_dict['Yes']['f1-score']:.4f}, No F1: {report_dict['No']['f1-score']:.4f}")
 
-        # 3. 儲存模型的所有類別結果
         all_results[name] = model_category_results
         
         output_file = f"results_pope_grouped_{name.replace(' ', '_').replace('/', '_')}.json"
