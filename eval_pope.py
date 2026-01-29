@@ -10,25 +10,19 @@ import re
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-# --- 匯入 POPE Dataset ---
 from dataset.pope import POPEDataset
 
-# --- 從您現有的 utils.py 匯入 (不修改) ---
 from dataset.utils import load_model_and_processor, collate_fn
 
-# --- 匯入 Scikit-learn ---
 from sklearn.metrics import classification_report, accuracy_score
 
 def score_yesno(pred, refs):
-    """是非題評分標準：pred 標籤必須完全匹配 refs 列表中的唯一標籤 (Yes/No)。"""
     if not pred: return 0.0
     pred = pred.strip().capitalize() # "Yes" or "No"
     refs = [a.strip().capitalize() for a in refs]
     return 1.0 if pred in refs else 0.0
 
 def parse_final_answer_yesno(full_text):
-    """從完整的 CoT 輸出中提取最終的是非答案 (Yes/No)。"""
-    # 1. 尋找 "Final Answer: [Yes/No]"
     match = re.search(r"Final Answer:\s*(Yes|No)", full_text, re.IGNORECASE)
     if match:
         return match.group(1).capitalize()
