@@ -49,4 +49,4 @@ We provide preprocessing scripts to generate the necessary annotations and mask 
 | **TextCaps** | `python preprocess_textcaps.py` | Processes OCR-related data |
 | **Florence-2 Fix** | `python fix_florence.py` | Used for modifying source code of Florence-2 due to  the incompatibility of Pytorch version |
 
-Example data directory structure:
+Link to full paper: TBD
