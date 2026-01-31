@@ -11,6 +11,7 @@ class POPEDataset(Dataset):
         print(f"Loading POPE dataset: {dataset_id} (Split: {split}, Category: {target_category})")
         
         self.dataset = datasets.load_dataset(dataset_id, split=split)
+        #self.dataset = self.dataset.shuffle(seed=42)
         
         initial_count = len(self.dataset)
         
