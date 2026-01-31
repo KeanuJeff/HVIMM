@@ -12,7 +12,7 @@ Existing Multimodal Large Language Models (MLLMs) predominantly rely on patch-ba
 At the core of our method is **Fourier Shape Encoding (FSE)**, a mathematically rigorous descriptor that maps object contours to the frequency domain, demonstrating invariance to scale, translation, sampling density, and starting point selection. By synthesizing these spectral features with semantic and positional embeddings via a cross-attention mechanism, SHARP restores the topological continuity of fragmented visual tokens without altering the pre-trained backbone. Evaluations across five benchmarks, including IconQA, demonstrate that our method significantly reduces object hallucination and improves geometric reasoning accuracy by **15.8%**.
 
 <div align="center">
-  <img src="assets/framework.png" width="800px" /> <br>
+  <img src="dataset/architecture.jpg" width="800px" /> <br>
   <em>Overview of the SHARP architecture: integrating semantic context, geometric grounding encoding, and composite structural prior fusion.</em>
 </div>
 
