@@ -1,1 +1,1 @@
-For executing another model, you can copy any of them directly from backup.yaml, and setting num_sample and max_length.
+For executing another model, you can copy any of them directly from backup.yaml, and setting num_sample, batch_size and max_new_tokens.
