@@ -12,9 +12,6 @@ from dataset.mcot import M3CoTDataset
 from dataset.utils import load_model_and_processor, collate_fn
 
 def mcot_score(pred, refs):
-    """
-    M3CoT 評分標準：pred 標籤必須完全匹配 refs 列表中的唯一標籤。
-    """
     if not pred: return 0.0
     pred = pred.strip().upper()
     refs = [a.strip().upper() for a in refs]
@@ -22,9 +19,6 @@ def mcot_score(pred, refs):
     return 1.0 if pred in refs else 0.0
 
 def parse_final_answer_mc(full_text):
-    """
-    從完整的 CoT 輸出中提取最終的選項標籤 (A, B, C, D)。
-    """
     match = re.search(r"Final Answer:\s*([A-D])", full_text, re.IGNORECASE)
     if match:
         return match.group(1).upper()
@@ -44,7 +38,6 @@ def parse_final_answer_mc(full_text):
     return ""
 
 def format_mc_prompt_cot(question, choices_list):
-    """(新函數) 格式化 CoT 提示，要求模型推理並給出標籤"""
     prompt = "Answer the following multiple-choice question. First, provide your answer and then conclude with the correct option letter in the format 'Final Answer: [Letter]'.\n\n"
     prompt += "--- Example Start ---\n"
     prompt += "Question: some example question?\n"
@@ -65,10 +58,6 @@ def format_mc_prompt_cot(question, choices_list):
     return prompt
 
 def generate_answer_mc(proc, m, mtype, images, questions, choices_batch, **kwargs):
-    """
-    此函數接受 'choices_batch' 並使用多選題 CoT 提示。
-    整合了 Gemma3, Qwen-VL, LLaVA, InstructBLIP, Qwen3-VL 等模型的批次生成邏輯。
-    """
     batch_size = len(questions)
     
     if mtype == "gemma3":
