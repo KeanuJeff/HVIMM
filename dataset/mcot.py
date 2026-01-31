@@ -9,6 +9,7 @@ class M3CoTDataset(Dataset):
         print(f"Loading M3CoT dataset: {dataset_id} (Split: {split})")
         
         self.dataset = load_dataset(dataset_id, split=split)
+        #self.dataset = self.dataset.shuffle(seed=42)
         
         if num_samples and num_samples > 0:
             print(f"Using {num_samples} samples from the dataset.")
