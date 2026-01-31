@@ -20,6 +20,7 @@ class ScienceQADataset(Dataset):
         self.dataset = self.dataset.filter(
             lambda x: x['subject'] != 'social science'
         )
+        #self.dataset = self.dataset.shuffle(seed=42)
         filtered_count = len(self.dataset)
         print(f"Filtered out {initial_count - filtered_count} 'social science' samples.")
         print(f"Final dataset size: {filtered_count}")
