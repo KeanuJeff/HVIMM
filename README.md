@@ -18,7 +18,7 @@ At the core of our method is **Fourier Shape Encoding (FSE)**, a mathematically 
 
 ## 📢 News
 * **[2026/01/28]** Released training and evaluation code.
-* **[TBD]** Pre-trained weights and datasets will be released soon.
+* **[TBD]** Model implementation and training files will be released soon.
 
 ## 🛠️ Installation
 
@@ -31,7 +31,6 @@ At the core of our method is **Fourier Shape Encoding (FSE)**, a mathematically 
 2. **Create environment**
     ```bash
     conda create -n sharp python=3.10 -y
-    conda activate sharp
     pip install --upgrade pip
     pip install -r requirements.txt
     ```
@@ -48,6 +47,6 @@ We provide preprocessing scripts to generate the necessary annotations and mask 
 | **RefCOCOg** | `python preprocess_refcocog.py` | Processes grounding data |
 | **ShareGPT4V** | `python preprocess_sharegpt4v.py` | Processes high-detail caption data |
 | **TextCaps** | `python preprocess_textcaps.py` | Processes OCR-related data |
-| **Florence-2 Fix** | `python fix_florence.py` | Used for fixing or completing mask generation |
+| **Florence-2 Fix** | `python fix_florence.py` | Used for modifying source code of Florence-2 due to  the incompatibility of Pytorch version |
 
 Example data directory structure:
