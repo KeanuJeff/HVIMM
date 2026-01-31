@@ -23,6 +23,8 @@ class IconQADataset(Dataset):
         self.dataset = self.dataset.filter(
             lambda x: x.get('ques_type') != 'choose_img'
         )
+
+        #self.dataset = self.dataset.shuffle(seed=42)
         
         final_filtered_count = len(self.dataset)
         removed_choose_img_count = initial_count - final_filtered_count
