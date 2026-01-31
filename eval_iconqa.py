@@ -12,14 +12,12 @@ from dataset.iconqa import IconQADataset
 from dataset.utils import load_model_and_processor, collate_fn
 
 def score_mc_acc(pred, refs):
-    """MCQ 評分: 標籤 A/B/C 是否匹配"""
     if not pred: return 0.0
     pred = pred.strip().upper()
     refs = [a.strip().upper() for a in refs]
     return 1.0 if pred in refs else 0.0
 
 def parse_final_answer_mc(full_text):
-    """MCQ 解析: 從 CoT 中提取 A/B/C"""
     match = re.search(r"Final Answer:\s*([A-Z])", full_text, re.IGNORECASE)
     if match: return match.group(1).upper()
     match = re.search(r"Answer:\s*([A-Z])", full_text, re.IGNORECASE)
@@ -31,7 +29,6 @@ def parse_final_answer_mc(full_text):
     return ""
 
 def format_mc_prompt_cot(question, choices_list):
-    """MCQ 提示: CoT 鏈式思考"""
     prompt = "Answer the following multiple-choice question either directly or with some reasoning. Conclude the final answer with the correct option letter in the format 'Final Answer: [Letter]'.\n\n"
     prompt += f"Question: {question}\n\n"
     prompt += "Options:\n"
@@ -42,10 +39,6 @@ def format_mc_prompt_cot(question, choices_list):
     return prompt
 
 def generate_answer_mc(proc, m, mtype, images, questions, choices_batch, **kwargs):
-    """
-    MCQ 生成: 呼叫模型 (長回答, CoT)
-    支援: Gemma3, Qwen-VL, LLaVA, InstructBLIP, Qwen3-VL
-    """
     batch_size = len(questions)
     
     if mtype == "gemma3":
@@ -156,14 +149,12 @@ def generate_answer_mc(proc, m, mtype, images, questions, choices_batch, **kwarg
     return [""] * batch_size
 
 def score_vqa(pred, refs):
-    """VQA 評分: 答案文本是否精確匹配"""
     if not pred: return 0.0
     pred = pred.strip().lower()
     refs = [a.strip().lower() for a in refs]
     return 1.0 if pred in refs else 0.0
 
 def parse_final_answer_vqa(full_text):
-    """VQA 解析: 清理答案文本"""
     try:
         split_tag = "Final Answer:"
         parts = full_text.split(split_tag)
@@ -181,14 +172,9 @@ def parse_final_answer_vqa(full_text):
         return ""
 
 def format_vqa_prompt(question):
-    """VQA 提示: 簡單直接提問"""
     return f"Answer the following question either directly or with reasoning. Give the final answer in a single word like 'Final Answer: [single word]'.\n\nQuestion: {question}\nAnswer:"
 
 def generate_answer_vqa(proc, m, mtype, images, questions, **kwargs):
-    """
-    VQA 生成: 呼叫模型 (短回答)
-    支援: Gemma3, Qwen-VL, LLaVA, InstructBLIP, Qwen3-VL
-    """
     batch_size = len(questions)
     
     if mtype == "gemma3":
